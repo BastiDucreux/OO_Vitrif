@@ -1,0 +1,955 @@
+---
+title: "Figures oocyte"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r packages}
+library(readr)
+library(readxl)
+library(pheatmap)
+library(radiant.data)
+library(dplyr)
+library(ggplot2)
+library(EnhancedVolcano)
+library(DESeq2)
+library(clusterProfiler)
+library(ggpointdensity)
+library(viridis)
+library(stringr)
+library(RColorBrewer)
+library(colorspace)
+library(ggforce)
+
+library(stringr)
+library(ggpubr)
+library(cowplot)
+library(enrichplot)
+library(GOSemSim)
+
+set.seed(100)
+```
+
+## Including Plots
+
+```{r PCA, echo=FALSE,fig.width=10,fig.height=11}
+
+cts <- read_delim("tablecounts_realigned.csv", 
+                  delim = ";", escape_double = FALSE, trim_ws = TRUE)
+cts=data.frame(cts)
+annotation = cts[,1]
+rownames(cts) = annotation
+cts=cts[,-1]
+
+coldata=read_excel("Sample info.xlsx",sheet = "Oocyte vitrif")
+coldata=data.frame(coldata)
+rownames(coldata)=coldata$ID
+
+coldata$type <- factor(coldata$type)
+coldata$condition <- factor(coldata$condition)
+coldata$Couple <- factor(coldata$Couple)
+coldata$age = factor(coldata$age)
+
+cts <- cts[, rownames(coldata)]
+all(rownames(coldata) == colnames(cts))
+group=coldata$condition
+Couple=coldata$Couple
+
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                              colData = coldata,
+                              design = ~ Couple+condition)
+
+keep <- rowSums(counts(dds) >= 10) >=3
+dds <- dds[keep,]
+rld <- rlog(dds, blind=TRUE)
+PCA=DESeq2::plotPCA(rld,returnData=TRUE,intgroup=c("condition","Couple"))
+percentVar <- round(100 * attr(PCA, "percentVar"))
+
+find    <- 5:11
+replace <- 1:7
+found   <- match(PCA$Couple, find)
+
+PCA$Couple=ifelse(is.na(found), PCA$Couple, replace[found])
+PCA$Couple=as.factor(PCA$Couple)
+
+colSums(cts[grepl( "MT-" , rownames(cts) ),])/colSums(cts)
+
+```
+
+```{r Figure 2, echo=FALSE,fig.width=4.5,fig.height=3}
+
+Surfaces <- read_excel("Surfaces.xlsx")
+Surfaces=as.data.frame(Surfaces)
+
+Surfaces$`Timing before vitrification and post thawing`=factor(Surfaces$`Timing before vitrification and post thawing`,levels=c("Before vitrification","0h post thawing","1h","2h","3h"))
+
+Surfaces$`Oocyte surfaces (µm2)`=as.numeric(Surfaces$`Oocyte surfaces (µm2)`)
+
+df_mean <- Surfaces %>% 
+  dplyr::group_by(`Timing before vitrification and post thawing`,`Vitrification method` ) %>% 
+  dplyr::summarise(average = mean(`Oocyte surfaces (µm2)`,na.rm=TRUE)) %>%
+  dplyr::ungroup()
+
+df_mean_auto=df_mean[which(df_mean$`Vitrification method`=="Semi-automated"),]
+df_mean_manual=df_mean[which(df_mean$`Vitrification method`=="Manual"),]
+
+
+
+ggplot(Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+ geom_jitter(width=0.1)+ scale_colour_manual(values=c("Auto"="#4E6FA3","Manual"="#90A3C5"))
+
+
+ggplot(Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+ geom_boxplot(position=position_dodge(0.12),width=0.1)+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+
+  geom_point(data = df_mean_auto, 
+             mapping = aes(x = `Timing before vitrification and post thawing`, y = average),
+             color="red")+
+  geom_point(data = df_mean_manual, 
+             mapping = aes(x =`Timing before vitrification and post thawing`, y = average),
+             color="red")+
+  geom_line(data = df_mean_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = average,group=1))+
+  geom_line(data = df_mean_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = average,group=1))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+ggplot(Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+ geom_jitter(width=0.1)+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+
+  geom_point(data = df_mean_auto, 
+             mapping = aes(x = `Timing before vitrification and post thawing`, y = average),
+             color="red")+
+  geom_point(data = df_mean_manual, 
+             mapping = aes(x =`Timing before vitrification and post thawing`, y = average),
+             color="red")+
+  geom_line(data = df_mean_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = average,group=1))+
+  geom_line(data = df_mean_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = average,group=1))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+df_sd <- Surfaces %>%
+  dplyr::group_by(`Timing before vitrification and post thawing`,`Vitrification method` ) %>%
+  dplyr::summarise(
+    sd = sd(`Oocyte surfaces (µm2)`,na.rm=TRUE),
+    `Oocyte surfaces (µm2)` = mean(`Oocyte surfaces (µm2)`,na.rm=TRUE)
+  )
+
+df_sd_auto=df_sd[which(df_sd$`Vitrification method`=="Semi-automated"),]
+df_sd_manual=df_sd[which(df_sd$`Vitrification method`=="Manual"),]
+
+ggplot(df_sd,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+geom_point()+
+  geom_line(data = df_sd_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  geom_line(data = df_sd_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  
+  geom_errorbar(aes(ymin=`Oocyte surfaces (µm2)`-sd, ymax=`Oocyte surfaces (µm2)`+sd), width=.2,
+                 position=position_dodge(0.05))+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+ggplot(df_sd,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+geom_point(data=Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)`))+
+  geom_line(data = df_sd_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  geom_line(data = df_sd_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  
+  geom_errorbar(aes(ymin=`Oocyte surfaces (µm2)`-sd, ymax=`Oocyte surfaces (µm2)`+sd), width=.7,
+                 position=position_dodge(0.05))+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+ggplot(df_sd,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+geom_point(data=Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)`),position = position_dodge(width=0.1))+
+  geom_line(data = df_sd_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  geom_line(data = df_sd_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  
+  geom_errorbar(aes(ymin=`Oocyte surfaces (µm2)`-sd, ymax=`Oocyte surfaces (µm2)`+sd), width=.7,
+                 position=position_dodge(0.1))+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+
+ggplot(df_sd,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`  ))+geom_jitter(data=Surfaces,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)`),width=0.1)+
+  geom_line(data = df_sd_auto, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  geom_line(data = df_sd_manual, 
+            mapping = aes(x = `Timing before vitrification and post thawing`, y = `Oocyte surfaces (µm2)`,group=1))+
+  
+  geom_errorbar(aes(ymin=`Oocyte surfaces (µm2)`-sd, ymax=`Oocyte surfaces (µm2)`+sd), width=.9,
+                 position=position_dodge(0))+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+ggplot(df_sd,aes(`Timing before vitrification and post thawing`,`Oocyte surfaces (µm2)` ,color=`Vitrification method`,fill=`Vitrification method`  ))+
+  geom_col(position = position_dodge(0.73), width = 0.7)+
+geom_errorbar(aes(ymin=`Oocyte surfaces (µm2)`-sd, ymax=`Oocyte surfaces (µm2)`+sd,color="black"), width=.3,
+                 position=position_dodge(0.73))+ scale_colour_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+
+  scale_fill_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+```
+
+
+
+```{r Figure 3a, echo=FALSE,fig.width=4,fig.height=3}
+
+
+percentVar <- round(100 * attr(PCA, "percentVar"))
+
+ggplot(PCA,aes(PC1,PC2,fill=Couple))+ geom_point(size=5,stroke = 0,shape = 21)  +xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance"))+
+  scale_fill_manual(values = c("1" = "#FF595E",
+                               "2" = "#FFAE43",
+                               "3"="#C5CA30",
+                               "4"="#52A675",
+                               "5"="#1982C4",
+                               "6"="yellow",
+                               "7"="#6A4C93"))+                            
+ theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+```
+
+
+
+```{r Figure 3a2, echo=FALSE,fig.width=4,fig.height=3}
+PCA$condition=str_replace(PCA$condition,"Frais","FH")
+PCA$condition=str_replace(PCA$condition,"Vitrif","FZ")
+colnames(PCA)=c("PC1","PC2","group","Condition","Patient","name")
+ggplot(PCA,aes(PC1,PC2,fill=Patient,color=Condition))+ geom_point(size=5,stroke = 2,shape = 21)  +xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance"))+
+  scale_fill_manual(values = c("1" = "#FF595E",
+                               "2" = "#FFAE43",
+                               "3"="#C5CA30",
+                               "4"="#52A675",
+                               "5"="#1982C4",
+                               "6"="yellow",
+                               "7"="#6A4C93"))+                            
+  scale_color_manual(values = c("FH" = "white",
+                               "FZ" = "grey") )+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+```
+
+```{r Figure 3b, echo=FALSE,fig.width=4,fig.height=3}
+
+
+PCA=DESeq2::plotPCA(rld,returnData=TRUE,intgroup=c("condition","Couple","age"))
+
+PCA$condition=str_replace(PCA$condition,"Frais","FH")
+PCA$condition=str_replace(PCA$condition,"Vitrif","FZ")
+colnames(PCA)=c("PC1","PC2","group","Condition","Patient","Age","name")
+ggplot(PCA,aes(PC1,PC2,fill=Age,color=Condition))+ geom_point(size=5,stroke = 2,shape = 21)  +xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance"))+
+  scale_fill_manual(values = c("Low" = "#FF595E",
+                               "High" = "#FFAE43"))+                            
+  scale_color_manual(values = c("FH" = "white",
+                                "FZ" = "grey") )+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+colnames(PCA)=c("PC1","PC2","group","Condition","Patient","Age","name")
+ggplot(PCA,aes(PC1,PC2,fill=Age))+ geom_point(size=5,stroke = 0,shape = 21)  +xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance"))+
+  scale_fill_manual(values = c("<23" = "#FF595E",
+                               ">29" = "#FFAE43"))+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+```
+
+```{r Figure 3c, echo=FALSE,fig.width=4,fig.height=3}
+
+rld_mat <- assay(rld)
+rld_cor <- cor(rld_mat)
+colannot=data.frame(coldata[,"condition"])
+colannot$coldata....condition..=str_replace(colannot$coldata....condition..,"Frais","FH")
+colannot$coldata....condition..=str_replace(colannot$coldata....condition..,"Vitrif","FZ")
+row.names(colannot)=rownames(rld_cor)
+colnames(colannot)="Condition"
+rowannot=data.frame(coldata[,"Couple"])
+row.names(rowannot)=rownames(rld_cor)
+colnames(rowannot)="Patient"
+
+find    <- 5:11
+replace <- 1:7
+found   <- match(rowannot$Patient, find)
+rowannot$Patient=as.factor(ifelse(is.na(found), rowannot$Patient, replace[found]))
+
+annot_col=list(Patient =c("#FF595E",
+            "#FFAE43",
+           "#C5CA30",
+           "#52A675",
+           "#1982C4",
+           "yellow",
+          "#6A4C93"),Condition=c("white","grey"))
+names(annot_col$Patient)=c("1","2","3","4","5","6","7")
+names(annot_col$Condition)=c("FH","FZ")
+pheatmap(rld_cor, drop=F,annotation_col = colannot,annotation_row = rowannot,annotation_colors=annot_col,fontsize = 13)
+
+```
+
+``
+
+```{r Figure 3c correlation, echo=FALSE,fig.width=4,fig.height=3}
+
+rld_mat <- assay(rld)
+rld_cor <- cor(rld_mat)
+colannot=data.frame(coldata[,"condition"])
+colannot$coldata....condition..=str_replace(colannot$coldata....condition..,"Frais","FH")
+colannot$coldata....condition..=str_replace(colannot$coldata....condition..,"Vitrif","FZ")
+row.names(colannot)=rownames(rld_cor)
+colnames(colannot)="Condition"
+rowannot=data.frame(coldata[,"age"])
+row.names(rowannot)=rownames(rld_cor)
+colnames(rowannot)="Correlation"
+
+pheatmap(rld_cor, drop=F,annotation_col = colannot,annotation_row = rowannot,fontsize = 13)
+
+```
+
+
+
+```{r Manuel vs Auto, echo=FALSE,fig.width=4,fig.height=3}
+
+set.seed(100)
+
+cts <- read_delim("tablecounts_realigned.csv", 
+                  delim = ";", escape_double = FALSE, trim_ws = TRUE)
+cts=data.frame(cts)
+annotation = cts[,1]
+rownames(cts) = annotation
+cts=cts[,-1]
+
+Gene_length=read_excel("GeneLength.xlsx")
+
+coldata=read_excel("Sample info.xlsx",sheet = "Oocyte")
+coldata=data.frame(coldata)
+rownames(coldata)=coldata$ID
+
+coldata$type <- factor(coldata$type)
+coldata$condition <- factor(coldata$condition)
+coldata$Couple <- factor(coldata$Couple)
+
+cts <- cts[, rownames(coldata)]
+all(rownames(coldata) == colnames(cts))
+group=coldata$condition
+Couple=coldata$Couple
+
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                              colData = coldata,
+                              design = ~ Couple+condition)
+
+keep <- rowSums(counts(dds) >= 10) >=3
+dds <- dds[keep,]
+dds = DESeq(dds)
+
+res=results(dds,contrast=c("condition","Auto","Manuel"),alpha = 0.05)
+res <- lfcShrink(dds, 
+                 contrast = c("condition","Auto","Manuel"),
+                 res=res,type='ashr')
+normalized_counts <- counts(dds, 
+                            normalized = TRUE)
+
+write.table(data.frame(res),"AutovsManual.xls",sep="\t",row.names=TRUE)
+
+```
+
+
+```{r Figure 4b, echo=FALSE,fig.width=4,fig.height=3}
+
+data <- data.frame(res) %>% 
+  mutate(
+    Expression = case_when(log2FoldChange >= 0 & padj <= 0.05 ~ "Up-regulated",
+                           log2FoldChange <= 0 & padj <= 0.05 ~ "Down-regulated",
+                           TRUE ~ "Unchanged")
+  )
+data=data[complete.cases(data),]
+p2 <- ggplot(data, aes(log2FoldChange, -log(pvalue,10))) +
+  geom_point(aes(color = Expression), size = 2) +
+  xlab(expression("log"[2]*"FC")) + 
+  ylab(expression("-log"[10]*"p-value")) +
+  scale_color_manual(values = c("firebrick3", "gray50", "green")) +
+  guides(colour = guide_legend(override.aes = list(size=3))) 
+p2+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+```
+
+
+```{r Figure 4c, echo=FALSE,fig.width=3,fig.height=2}
+
+TIN = read_excel("TIN_canonical.xlsx")
+TIN=TIN[,-c(1,2,3,4)]
+TIN=apply(TIN,2,function(x) as.numeric(as.character(x)))
+TIN[TIN==0] = NA
+
+coldata=read_excel("Sample info.xlsx",sheet = "Oocyte")
+coldata=data.frame(coldata)
+TIN=TIN[,coldata$ID]
+rownames(coldata)=coldata$ID
+coldata$TIN=colMedians(TIN,na.rm=TRUE)
+
+tab=coldata[,c(1,4,5,7)]
+tab$condition=str_replace(tab$condition,"Frais","FH")
+tab$condition=str_replace(tab$condition,"Manuel","Manual")
+tab$condition=str_replace(tab$condition,"Auto","Semi-automated")
+tab$condition=factor(tab$condition,levels=c("FH","Semi-automated","Manual"))
+tab[order(tab[,3],tab[,2]),]
+
+Frais=c(33.42597,32.27297,37.26781,38.21987,NA,38.01733,32.29603)
+Auto=c(41.62012,37.16718,36.96031,36.69470,43.30471,37.56619,35.45102)
+Manuel=c(45.96428,37.50268,40.17030,41.77129,44.97919,34.91371,35.62351)
+
+t.test(Frais,Manuel,paired=TRUE)
+t.test(Frais,Auto,paired=TRUE)
+t.test(Auto,Manuel,paired=TRUE)
+
+wilcox.test(Frais,Manuel,paired=TRUE)
+wilcox.test(Frais,Auto,paired=TRUE)
+wilcox.test(Auto,Manuel,paired=TRUE)
+
+wilcox.test(c(Auto,Manuel),Frais)
+
+data=tab[order(tab[,3],tab[,2]),]
+
+data$MT=colSums(cts[grepl( "MT-" , rownames(cts) ),])/colSums(cts)
+
+my_comparisons <- list( c("FH","Semi-automated"), c("Semi-automated","Manual"), c("FH","Manual") )
+p<-ggplot(data, aes(x=condition, y=MT, color=condition))+geom_boxplot(fill='#A4A4A4', color="black") +ylim(0,1)+ylab("medTIN")+xlab("Condition")+labs(color="Condition")+
+  scale_x_discrete(labels=c("FH","Semi-automated","Manual"))  + theme_classic() + 
+  stat_compare_means(comparisons = my_comparisons,vjust=-10) # Add pairwise comparisons p-value
+p+theme_classic()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,vjust=-1,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+Frais=c(0.11696643,0.27509936,0.27659993,0.11729179,NA,0.08733389,0.14559256)
+Auto=c(0.13236885,0.18107862,0.20066055,0.09237775,0.14969948,0.08561886,0.09883847)
+Manuel=c(0.19404523,0.13906625,0.19298102,0.26029106,0.17791899,0.06798587,0.11264144)
+wilcox.test(Frais,Manuel,paired=TRUE)
+wilcox.test(Frais,Auto,paired=TRUE)
+wilcox.test(Auto,Manuel,paired=TRUE)
+
+wilcox.test(c(Auto,Manuel),Frais)
+```
+
+
+```{r Figure 4c2, echo=FALSE,fig.width=3,fig.height=2}
+my_comparisons <- list( c("FH","Semi-automated"), c("Semi-automated","Manual"), c("FH","Manual") )
+p<-ggplot(data, aes(x=condition, y=TIN, color=condition))+geom_boxplot(fill='#A4A4A4', color="black") +ylim(0,50)+ylab("medTIN")+xlab("Condition")+labs(color="Condition")+
+  scale_x_discrete(labels=c("FH","Semi-automated","Manual"))  + theme_classic() + 
+  stat_compare_means(comparisons = my_comparisons,vjust=-10) # Add pairwise comparisons p-value
+p+theme_classic()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,vjust=-1,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+data2=data[which(data$condition!="FH"),]
+my_comparisons <- list( c("Semi-automated","Manual") )
+p<-ggplot(data2, aes(x=condition, y=TIN, color=condition))+geom_boxplot(fill='#A4A4A4', color="black") +ylim(0,50)+ylab("medTIN")+xlab("Condition")+labs(color="Condition")+
+  scale_x_discrete(labels=c("Semi-automated","Manual"))  + theme_classic() + 
+  stat_compare_means(comparisons = my_comparisons,vjust=-10) # Add pairwise comparisons p-value
+p+theme_classic()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,vjust=-1,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+data2=data
+data2$condition=str_replace_all(data2$condition,"Manual","FZ")
+data2$condition=str_replace_all(data2$condition,"Semi-automated","FZ")
+my_comparisons <- list( c("FH","FZ") )
+p<-ggplot(data2, aes(x=condition, y=TIN, fill=condition))+geom_boxplot()+ylim(0,50)+ylab("medTIN")+xlab("Condition")+
+  scale_x_discrete(labels=c("FH","FZ")) +
+  scale_fill_manual(values=c("FH"="white","FZ"="grey"))+ theme_classic() + 
+  stat_compare_means(comparisons = my_comparisons,vjust=-10) # Add pairwise comparisons p-value
+p+theme_classic()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,vjust=-1,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))+labs(color="Condition")
+
+```
+
+```{r SUPP Figure, echo=FALSE,fig.width=4,fig.height=3}
+top20_sig_norm <- data.frame(normalized_counts) %>%
+  rownames_to_column(var = "gene") %>%
+  dplyr::filter(gene %in% c("TET1","TET2",
+                            "TET3",
+                            "TDG",
+                            "DNMT1",
+                            "UHRF1",
+                            "DNMT3A",
+                            "DNMT3B",
+                            "DNMT3L"
+  )) %>% dplyr::select(c("gene",rownames(coldata[coldata$condition==c("Frais")|coldata$condition==c("Auto")|coldata$condition==c("Manuel"),])))
+gathered_top20_sig <- top20_sig_norm %>%
+  gather(colnames(top20_sig_norm)[2:length(colnames(top20_sig_norm))], key = "samplename", value = "normalized_counts")
+gathered_top20_sig <- inner_join(coldata[, c("condition", "ID","Couple")], gathered_top20_sig, by = c("ID" = "samplename"))
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Frais","FH")
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Auto","Semi-automated")
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Manuel","Manual")
+
+ggplot(gathered_top20_sig,aes(x = gene, 
+                             y = normalized_counts,
+                             fill=condition)) +
+  geom_boxplot(position=position_dodge(1),outlier.size = 0.5)+
+  scale_y_log10() +
+  xlab("Genes") +
+  ylab(expression("log"[10]*" normalized counts")) +
+  scale_fill_manual(values=c("Semi-automated"="#09207D","Manual"="#75D7FF","FH"="white"))+labs(fill="Condition")+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+```
+
+
+```{r Figure 5}
+
+cts <- read_delim("tablecounts_realigned.csv", 
+                  delim = ";", escape_double = FALSE, trim_ws = TRUE)
+cts=data.frame(cts)
+annotation = cts[,1]
+rownames(cts) = annotation
+cts=cts[,-1]
+
+coldata=read_excel("Sample info.xlsx",sheet = "Oocyte vitrif")
+coldata=data.frame(coldata)
+rownames(coldata)=coldata$ID
+
+coldata$type <- factor(coldata$type)
+coldata$condition <- factor(coldata$condition)
+coldata$Couple <- factor(coldata$Couple)
+coldata$age = factor(coldata$age)
+
+cts <- cts[, rownames(coldata)]
+all(rownames(coldata) == colnames(cts))
+group=coldata$condition
+Couple=coldata$Couple
+
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                              colData = coldata,
+                              design = ~ Couple+condition)
+
+keep <- rowSums(counts(dds) >= 10) >=3
+dds <- dds[keep,]
+dds = DESeq(dds)
+plotDispEsts(dds)
+res=results(dds,contrast=c("condition","Vitrif","Frais"),alpha = 0.05)
+res <- lfcShrink(dds, 
+                 contrast = c("condition","Vitrif","Frais"),
+                 res=res,type='ashr')
+res2=mutate(data.frame(res),mean=baseMean,logFC=log2FoldChange,signif=padj<0.05)%>%dplyr::select(mean,logFC,signif)
+res3=res2
+res3[is.na(res3)]=FALSE
+
+write.table(data.frame(res),"FHvsFZ.xls",sep="\t",row.names=TRUE)
+
+
+```
+
+
+
+```{r Figure 5a, echo=FALSE,fig.width=4,fig.height=3}
+
+ggplot(res3, aes(mean, logFC)) +
+  geom_point(aes(color = signif), size = 1) +
+  ylab(expression("log"[2]*"FC")) + 
+  xlab(expression("Mean of normalized counts")) + ylim(-1,1)+ labs(colour = "Significance")+
+  scale_color_manual(values = c("gray50","firebrick3"),labels=c("FDR>0.05","FDR<0.05"))+ scale_x_continuous(trans='log2')+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15))+ 
+  theme(axis.text.x=element_text(size=10,vjust=-0.5,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+
+```
+
+```{r Figure 5b, echo=FALSE,fig.width=4,fig.height=3}
+
+data <- data.frame(res) %>% 
+  mutate(
+    Expression = case_when(log2FoldChange >= 0 & padj <= 0.05 ~ "Up-regulated",
+                           log2FoldChange <= 0 & padj <= 0.05 ~ "Down-regulated",
+                           TRUE ~ "Unchanged")
+  )
+data=data[complete.cases(data),]
+p2 <- ggplot(data, aes(log2FoldChange, -log(pvalue,10))) +
+  geom_point(aes(color = Expression), size = 2) +
+  xlab(expression("log"[2]*"FC")) + 
+  ylab(expression("-log"[10]*"p-value")) +
+  scale_color_manual(values = c("firebrick3", "gray50", "green")) +
+  guides(colour = guide_legend(override.aes = list(size=3))) 
+p2+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+```
+
+
+```{r Figure 5c, echo=FALSE,fig.width=4,fig.height=3}
+
+df=data.frame(rowMeans(rld_mat[,which(coldata$condition=="Frais")]),rowMeans(rld_mat[,which(coldata$condition=="Vitrif")]))
+colnames(df)=c("FH","FZ")
+ggplot(data = df, mapping = aes(x = FH, y = FZ)) +
+  geom_pointdensity() + xlab("Normalized mean expression (FH)")+ ylab("Normalized mean expression (FZ)")+ labs(colour = "Gene density")+
+  scale_color_viridis()+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+```
+
+```{r Figure 5d, echo=FALSE,fig.width=10,fig.height=5}
+
+padj_cutoff <- 0.05
+res_tbl <- res %>%
+  data.frame() %>%
+  rownames_to_column(var="gene") %>%
+  as_tibble()
+sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
+  dplyr::arrange(padj)
+GO=enrichGO(unique(sig_res[which(sig_res$log2FoldChange<0),]$gene)[!grepl('^TE_',unique(sig_res[which(sig_res$log2FoldChange<0),]$gene))],keyType = "SYMBOL",'org.Hs.eg.db', ont="BP", qvalueCutoff=0.05)
+dotplot(GO)
+
+d <- godata('org.Hs.eg.db', ont="BP")
+GO2 <- pairwise_termsim(GO,method="Rel",semData = d)
+treeplot(GO2, hexpand = 0.2)+ 
+theme(legend.position="bottom")
+
+```
+
+```{r Figure 5e, echo=FALSE,fig.width=3,fig.height=3}
+
+dfCatabolicprocess=data.frame(res[c("CNOT4","SERBP1","HSPB1","RPL11","PSMD7","MAGOH","RPS7","RPL9","RPS23"),])
+dfCatabolicprocess=dfCatabolicprocess[order(dfCatabolicprocess$log2FoldChange),]
+dfCatabolicprocess$gene=factor(rownames(dfCatabolicprocess),levels=rownames(dfCatabolicprocess))
+
+dfRibonucleo=data.frame(res[c("NIP7","HSP90AB1","METTL17","PRPF6","USP4","LUC7L3","RPL11","RPS7","RPL7L1","RRS1"),])
+dfRibonucleo=dfRibonucleo[order(dfRibonucleo$log2FoldChange),]
+dfRibonucleo$gene=factor(rownames(dfRibonucleo),levels=rownames(dfRibonucleo))
+
+A=ggplot(dfCatabolicprocess, aes(x = log2FoldChange, y = gene, fill = factor(sign(log2FoldChange)))) +
+    geom_bar(position = 'identity', stat = "identity") + scale_fill_manual(values=c("-1"="firebrick3","1"="green"))+
+    guides(fill = "none") +
+    labs(y = "diff")+theme_bw()+ ylab("Genes")+xlab(expression("log"[2]*"FC"))+xlim(-0.54,0.54)+scale_x_continuous(breaks=c(-0.5,0,0.5))+
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,face="italic",margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))+ ggtitle("GO:0006402 \n mRNA catabolic process")+theme(
+  plot.title = element_text(hjust = 0.5))
+
+
+B=ggplot(dfRibonucleo, aes(x = log2FoldChange, y = gene, fill = factor(sign(log2FoldChange)))) +
+    geom_bar(position = 'identity', stat = "identity") + scale_fill_manual(values=c("-1"="firebrick3","1"="green"))+
+    guides(fill = "none") +
+    labs(y = "diff")+theme_bw()+ ylab("Genes")+xlab(expression("log"[2]*"FC"))+xlim(-0.54,0.54)+scale_x_continuous(breaks=c(-0.5,0,0.5))+
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(2,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,face="italic",margin=margin(0,2,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))+ ggtitle("GO:0022613 \n ribonucleoprotein complex biogenesis") +theme(
+  plot.title = element_text(hjust = 0.5))
+
+plot_grid(A, B, ncol = 1, nrow = 2,align = "hv")
+
+```
+
+
+```{r Figure 7, echo=FALSE,fig.width=4,fig.height=3}
+TE=data.frame(res[1:662,])
+TE=TE[order(TE$baseMean,decreasing=TRUE),]
+TE=TE[1:20,]
+TE2=t(normalized_counts[rownames(TE),])
+TE2=cbind(TE2,coldata)
+TE3=t(aggregate(x = TE2[,1:20],by = list(TE2$group),FUN = mean))
+colnames(TE3)=TE3[1,]
+TE3=data.frame(TE3[-1,])
+
+TE4=data.frame(res[c(rownames(TE),"TE_LTR16C", "TE_MLT1A1",
+"TE_LTR13A", "TE_PABL_A-int"),])
+
+TE4$gene=factor(rownames(TE4),levels=rev(rownames(TE4)))
+TE4$gene=str_replace(TE4$gene,"TE_","")
+TE4$gene=factor(TE4$gene,levels=rev(TE4$gene))
+
+A=ggplot(TE4, aes(x="", gene, fill = log2FoldChange)) +
+  geom_raster()+ xlab(expression("log"[2]*"FC")) + ylab("Transposable elements families")+
+  labs(fill = expression("log"[2]*"FC"))+scale_fill_continuous_divergingx(palette = "RdBu")+theme_bw()+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+res_tbl <- res %>%
+  data.frame() %>%
+  rownames_to_column(var="gene") %>%
+  as_tibble()
+sig_res=res_tbl[1:662,]
+normalized_counts <- counts(dds, 
+                            normalized = TRUE)
+top20_sig_genes <- sig_res %>%
+  dplyr::arrange(desc(baseMean)) %>%
+  dplyr::pull(gene) %>%
+  head(n=20)
+top20_sig_genes=c(top20_sig_genes,"TE_LTR16C", "TE_MLT1A1",
+"TE_LTR13A", "TE_PABL_A-int")
+
+top20_sig_norm <- data.frame(normalized_counts) %>%
+  rownames_to_column(var = "gene") %>%
+  dplyr::filter(gene %in% top20_sig_genes) %>% dplyr::select(c("gene",rownames(coldata[coldata$condition==c("Vitrif")|coldata$condition==c("Frais"),])))
+gathered_top20_sig <- top20_sig_norm %>%
+  gather(colnames(top20_sig_norm)[2:length(colnames(top20_sig_norm))], key = "samplename", value = "normalized_counts")
+gathered_top20_sig <- inner_join(coldata[, c("condition", "ID" )], gathered_top20_sig, by = c("ID" = "samplename"))
+gathered_top20_sig$gene=factor(gathered_top20_sig$gene,levels=rev(rownames(TE4)))
+
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Frais","FH")
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Vitrif","FZ")
+gathered_top20_sig$gene=str_replace(gathered_top20_sig$gene,"TE_","")
+gathered_top20_sig$gene=factor(gathered_top20_sig$gene,levels=rev(TE4$gene))
+
+
+B=ggplot(gathered_top20_sig,aes(x = normalized_counts, 
+                              y = gene,
+                              fill=condition)) +
+  geom_boxplot( 
+             position=position_dodge(0.6),width=0.6) +
+  scale_x_log10() +
+  xlab(expression("log"[10]*" normalized counts")) +
+  ylab("Genes") +
+  scale_fill_manual(values=c("white","grey"))+labs(fill="Condition")+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+plot_grid(A, B, ncol = 2, nrow = 1,align = "hv")
+
+```
+```{r SUPP Figure, echo=FALSE,fig.width=4,fig.height=3}
+top20_sig_norm <- data.frame(normalized_counts) %>%
+  rownames_to_column(var = "gene") %>%
+  dplyr::filter(gene %in% c("TET1","TET2",
+                            "TET3",
+                            "TDG",
+                            "DNMT1",
+                            "UHRF1",
+                            "DNMT3A",
+                            "DNMT3B",
+                            "DNMT3L"
+  )) %>% dplyr::select(c("gene",rownames(coldata[coldata$condition==c("Frais")|coldata$condition==c("Vitrif"),])))
+gathered_top20_sig <- top20_sig_norm %>%
+  gather(colnames(top20_sig_norm)[2:length(colnames(top20_sig_norm))], key = "samplename", value = "normalized_counts")
+gathered_top20_sig <- inner_join(coldata[, c("condition", "ID","Couple")], gathered_top20_sig, by = c("ID" = "samplename"))
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Frais","FH")
+gathered_top20_sig$condition=str_replace(gathered_top20_sig$condition,"Vitrif","FZ")
+
+ggplot(gathered_top20_sig,aes(x = gene, 
+                             y = normalized_counts,
+                             fill=condition)) +
+  geom_boxplot(position=position_dodge(1),outlier.size = 0.5)+
+  scale_y_log10() +
+  xlab("Genes") +
+  ylab(expression("log"[10]*" normalized counts")) +
+  scale_fill_manual(values=c("white","grey"))+labs(fill="Condition")+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  theme(axis.title.x=element_text(size=15))+ 
+  theme(axis.title.y=element_text(size=15,vjust=0))+ 
+  theme(axis.text.x=element_text(size=10,margin=margin(0,0,10,0)))+ 
+  theme(axis.text.y=element_text(size=10,margin=margin(0,0,0,15)))+ 
+  theme(legend.title=element_text(size=15))+ 
+  theme(legend.text=element_text(size=12))
+
+res[c("TET2",
+       "TET3",
+       "TDG",
+       "DNMT1",
+       "UHRF1",
+       "DNMT3A",
+       "DNMT3B"),]
+```
+
+
+```{r Heatmap coverage}
+D655T23Aligned.sortedByCoord.out <- c(0.0,0.05853164167573459,0.12558020714643717,0.18105380026288875,0.22616078997451552,0.2673584807257639,0.30036365982867147,0.32737870565741195,0.3459108600280921,0.3649473117547692,0.3907203982755771,0.4085369896143915,0.43151058494073513,0.4529832216159261,0.4623902899113126,0.4805949382865558,0.49608141949319223,0.5111064752487675,0.5186280636837839,0.5254698893374479,0.529366812902587,0.537448829950578,0.5457425546528393,0.5568790844329019,0.5622124378025894,0.5690723845707107,0.5817492090796507,0.5914267681566937,0.6001178314418131,0.5994088980859683,0.6052452228764484,0.615850494618029,0.621474227797436,0.6324622528346284,0.6417583845512638,0.6520162612693443,0.6617221069640769,0.6712272944645741,0.6765955641279722,0.6866779754206972,0.6948077261360391,0.6931100870962638,0.7078531606317463,0.7145822817930534,0.7241356449393032,0.7328563207773162,0.7374484763678568,0.7414245140668466,0.7462566639293471,0.7482862287485735,0.7522883431732458,0.7600269430033493,0.764317227345734,0.7733061840733967,0.7789259394471911,0.7919002154202729,0.8055264095354189,0.8109786550950828,0.8109419708877666,0.8211220594072008,0.8270039079730251,0.8379636463925281,0.8505366059771391,0.8555026752952637,0.8624660450093125,0.8754367851551831,0.882469987456653,0.8837380234902681,0.8869074506067037,0.8886298404369575,0.8983237527148523,0.9024160307334101,0.9095809425984971,0.9166265202952062,0.930948388414155,0.9460459286275599,0.9553579715666455,0.9510725489866761,0.9545814155153866,0.960036312945459,0.9659009243536287,0.9751360630508709,0.983691880945162,0.9764036571060846,0.9661029084830682,0.9649661400346687,0.9635133570292687,0.9785720031433504,0.9886314315592025,1.0,0.9920116823731058,0.9767634275248237,0.9450430796347844,0.8958999431615776,0.8303854847221326,0.7257223474003273,0.5724667786934589,0.3873777156257928,0.18784214652998338,0.03275943911172949)
+D655T36Aligned.sortedByCoord.out <- c(0.021289048389440384,0.08895073548929662,0.16646589295730746,0.228090974842946,0.2778125027904028,0.32215413413902577,0.3561824367380171,0.3848612834959952,0.4091976546816668,0.4280348014978476,0.4562704308219573,0.4743530527209573,0.498269747325475,0.5200840002565141,0.5264104014851843,0.542757900188408,0.5561019107866623,0.5736897689018842,0.5823653848807656,0.5927939826333447,0.5974554773476115,0.6063644724697845,0.6154626061672164,0.625378987434867,0.6305255048904093,0.6402231185785221,0.654128456750989,0.6641227663586603,0.6691803968013663,0.671394860463625,0.6785874027214849,0.6890074770618743,0.6955916100400925,0.706638358114816,0.7153630851829814,0.7240054192666456,0.7310506282566538,0.7385995303194006,0.7401686499158617,0.7480873057169367,0.7558687751694333,0.7543629723492391,0.7680069258812193,0.7765287145639138,0.7838280024125315,0.796647620222729,0.8025312098943016,0.8061832890792361,0.8092172179420262,0.8114641517459601,0.8136838918062409,0.8192086864123009,0.8224159246562832,0.8270311494186627,0.8322048606178581,0.8447663408017365,0.8608946660486516,0.8659543258752124,0.868509726025062,0.8784127133592715,0.8830953136656273,0.8947715766120816,0.9065866494141981,0.9146282858768684,0.9211024262501614,0.9316239697832862,0.9395341021721713,0.9439118890235498,0.9479182986295165,0.9490555653416954,0.958888335994532,0.9591042624366731,0.965048327747116,0.9676711034409421,0.9798810943411849,0.9925257792631064,1.0,0.9869871848468342,0.9798770355734755,0.9750442608618712,0.9707740313547923,0.974585214233936,0.9770606566599102,0.9607099109425189,0.9415971737988685,0.9279069503150009,0.9099805909728136,0.9061377497055364,0.8978947983644789,0.8936846386194994,0.8711308782118043,0.842530771547389,0.7912859880785875,0.7213465205402058,0.6487952359808133,0.537797680170728,0.4061446496106424,0.25689523752314514,0.10656538147140071,0.0)
+D655T20Aligned.sortedByCoord.out <- c(0.0,0.051385553625425066,0.11799507467906399,0.17458561089236635,0.22628692132862943,0.2741263530755654,0.3135683522499265,0.34778019322132914,0.37977203025562956,0.40572384291508146,0.4355032590288704,0.4582729346061882,0.4852696869518427,0.5093945992542558,0.5209793253602464,0.5427295401871064,0.561140801148736,0.5803458522870834,0.593784170968512,0.6042933220012734,0.6143098802763008,0.6272407434874778,0.6391751983186329,0.6497817152844192,0.6571878959282538,0.6666105523438952,0.6832279749008218,0.6917582619240661,0.6997813967977224,0.7031379432614433,0.7127386489066352,0.7225167971400501,0.7283171981906316,0.7380983796306828,0.7509837447423154,0.7579076455309796,0.7651096913681915,0.7694004654758904,0.7711324264652132,0.7796372345527127,0.7848607197010714,0.7824647897790643,0.7936272935212829,0.7979957177188709,0.8013107092516746,0.8116961054536752,0.814084149038428,0.8163863528753738,0.8192114815364162,0.8238110360796896,0.829603247472353,0.8365511105934439,0.8413475202474126,0.8465094313010546,0.8498062235940405,0.8616114638224894,0.8763695307113688,0.8760407311119948,0.8778706646756699,0.8823176489251378,0.8847357212555899,0.8926147788140223,0.9003060808816682,0.9057191414447952,0.910671761240533,0.9183673097974697,0.92869082858409,0.932270619056242,0.9350490363350856,0.940856110440267,0.9478752539173105,0.9476595929254702,0.9585645774242677,0.9607305902832439,0.9729040617973387,0.9787096192992019,0.9887082816550753,0.9867627829185575,0.9870278851785694,0.9888183870559727,0.9911190742896002,0.9970356471543517,1.0,0.9892366662511174,0.974367280678686,0.9692344884087525,0.9673805925126507,0.9762618215437141,0.9740445474925846,0.9702381764847016,0.9487906756801435,0.9213334825670998,0.8818842036968115,0.823464643881825,0.7630683433019669,0.6644694117793366,0.5381636542374958,0.37493376235007997,0.19797072409618782,0.0465090673162582)
+D655T25Aligned.sortedByCoord.out <- c(0.0,0.06437687890650345,0.1352663992041006,0.19531706209312888,0.24657944395181347,0.29415430283106603,0.33205617254579667,0.3631111853061401,0.38836321560654885,0.4107833688388087,0.44053869195665807,0.46247087019054006,0.48533506715401087,0.5082222435495383,0.520694330298246,0.5410128792958021,0.5585083374786426,0.5757371666630621,0.5896532403702662,0.5984084039838224,0.6072970510630015,0.6197785999307913,0.6287446336267491,0.6399927276856198,0.6483116200229254,0.6580826097065121,0.6758095518740402,0.6856461005255531,0.6941211178277137,0.697839730626987,0.7054111155568051,0.718051492852045,0.725593815558968,0.7372622980513441,0.7494339625191946,0.7592137384562148,0.770593288383762,0.778308632696758,0.7824929169280014,0.791728958950624,0.7977816737677618,0.7969915868244047,0.8094839495425741,0.8137263582196077,0.8181262435927936,0.8290495842074529,0.8361522563098817,0.8406906941410559,0.8435587300214115,0.8462838203170621,0.849961881177412,0.8544425324956204,0.860870014814975,0.8635501600449856,0.8674103666976664,0.8745860322901572,0.8879134270173238,0.8904749578259835,0.8904972613923914,0.8985826421480633,0.9034127160066613,0.9118505606981422,0.9216296607695136,0.9274039189393776,0.9346052674265198,0.9428373110279646,0.9481252838635724,0.9488984741657115,0.9517273098384411,0.9541381226074356,0.9634055923827238,0.9613316986396176,0.9690375808335316,0.9748074458766789,0.9874971613642753,0.99287941745788,1.0,0.9929304453143586,0.992498905097649,0.9894355440448126,0.9869574826437701,0.9871599044055627,0.9879861501611263,0.973358389925817,0.9555679163873089,0.9418350022709086,0.9383221905616714,0.9374303858381815,0.9300350639098558,0.920725014598698,0.8904198747756126,0.8501879582369098,0.8067696730973031,0.7467930174968099,0.6767091290524905,0.5772767886108527,0.45510798981335293,0.30374145705820016,0.1378336748707745,0.007110782490213466)
+D655T31Aligned.sortedByCoord.out <- c(0.002084863848097587,0.07054791755806537,0.1490792692279747,0.21440554133802647,0.27133382848008786,0.3172302997521575,0.3609777264690924,0.393497162324714,0.42551445478691197,0.4514148011205386,0.4819305072294117,0.5039961572306226,0.5320483736851028,0.5583418773058635,0.5665913182475034,0.5874052426353648,0.6026693522996068,0.6235547231349248,0.6342551405113467,0.6406421299921692,0.6476535694968071,0.658643405533265,0.6685316745917057,0.6812124098846362,0.68823232608643,0.6968026705632564,0.7091972164141149,0.7189619678854273,0.7255310045289782,0.7267145129128353,0.735998918211982,0.7466928771524756,0.7532853256262665,0.7656366806868546,0.7761489961168654,0.7860090095181199,0.7964894364207348,0.8037648644939411,0.806594870387264,0.8172504823644334,0.8249440941639958,0.8243374048389831,0.8358689421889254,0.8398146428888584,0.8444796518903035,0.8532263923984209,0.8543025292849704,0.8577908919907321,0.8584238187117035,0.8596335644915193,0.8632377753917445,0.8688586329105749,0.8721492060160331,0.8775904382856082,0.884365337574373,0.8976236992306388,0.9149674252637867,0.9160310489307252,0.915528501885056,0.921812156391026,0.9232015274200971,0.9325755435177486,0.9423354511621148,0.9465689559131018,0.9524017308608288,0.9605224067361486,0.9704518483236322,0.9740835075765526,0.976372619460882,0.9753808458936457,0.9836000129168718,0.9798036635477804,0.9848343814836642,0.9851524594531319,0.9930773639893758,0.997825121701152,1.0,0.9897710484463426,0.9802202326651543,0.9748573089312096,0.9661630432150095,0.962139841283937,0.9566667204869661,0.9371033107557177,0.9151809573016655,0.9043844706908104,0.8876809371190532,0.8835802339568415,0.8683661771710436,0.8541652875214945,0.8245521478335984,0.7898271561084694,0.7461172690503677,0.6840973124833494,0.6178531351669909,0.5194855048478635,0.39765437680129817,0.25600957463126367,0.11261655458589316,0.0)
+D655T22Aligned.sortedByCoord.out <- c(0.0,0.06046674984861038,0.13244883127857085,0.194296474833034,0.24967575566022238,0.29665530177970695,0.3385554789112389,0.37323204619481487,0.40525731052320707,0.4322693021367564,0.46149875891287184,0.48453914211573523,0.5113074847225269,0.5386765258114047,0.552294626081395,0.5753732414422337,0.5944429882384274,0.6124114544841299,0.6248842100215558,0.6345478739518152,0.6459342530003334,0.6606610858516068,0.6719386004502971,0.6837406732164617,0.6907760382865902,0.7024627665761515,0.7214738691300272,0.7339527806928898,0.7431796908184825,0.7481145552093421,0.7590029442001655,0.7701988104614849,0.7786157172401437,0.7894422219752611,0.8015819041364279,0.8142218443646609,0.8247593399055925,0.8311988665137164,0.8332734470858834,0.8392421997487693,0.8448257148198537,0.84604979187774,0.8570123771751424,0.8592800625452184,0.8594845073899845,0.8647440211222953,0.8685938050296024,0.8728123024604337,0.8762531966782087,0.877086852122873,0.881793619571236,0.8888620327779194,0.8945346482171664,0.9007911140688833,0.9043256446735638,0.9135068706103894,0.9268897459084301,0.9290304227537068,0.9313233802282072,0.9376676504427316,0.9395510702250222,0.9460596091183049,0.950817892779533,0.9537491328914172,0.9587154254121378,0.9641003276625539,0.9688848554322227,0.9700826883816684,0.9711165766536948,0.9703111093255037,0.9754228784473338,0.9717911474410212,0.9768180282120926,0.9802871105463408,0.9902533917270147,0.9951587719960459,1.0,0.993265956174931,0.9897583176813687,0.9866754449429385,0.9841388384616805,0.9860118902011303,0.9869660741438183,0.9754290344727704,0.9609247905412345,0.9498040925905106,0.9405784784702731,0.9436470951497972,0.9358642589911181,0.9230791661631146,0.8932943710923413,0.8573260104710753,0.8176005303253913,0.7617964837430709,0.6998435397535062,0.6028242548698212,0.479517769367423,0.3303378329559258,0.1681359587377815,0.02965260252455363)
+D655T24Aligned.sortedByCoord.out <- c(0.011434096284145625,0.08323512347575034,0.1646879468003918,0.23566735141266076,0.29219919645820036,0.34039609251840575,0.38252830295544504,0.4141845532050542,0.4444887387240198,0.46587488826586443,0.49576299801111423,0.519076311782351,0.5486372973809011,0.5739972247092371,0.5840044642824727,0.6055993778469059,0.6221258640107526,0.6406092859689518,0.6516988308488599,0.6619333509058181,0.6678858485585842,0.6810960728401274,0.6918908066133538,0.7028409334329592,0.7080818180695972,0.7178969947420512,0.7354048533459971,0.7492595230885748,0.7591839831885056,0.7611133258250898,0.7696036678568031,0.7813928445132821,0.7870454481092515,0.7988012225221163,0.8065447339547603,0.8154765665107653,0.8256689706953403,0.8319558538521138,0.8367298332138841,0.8428195705197606,0.8500159386792898,0.8487172449248559,0.8628914143889604,0.8678360356474553,0.873887650827468,0.8799443489575959,0.882555533045348,0.8847510044272495,0.8848101844893052,0.885148200671966,0.8873033715208114,0.8946674770341422,0.8984898555207737,0.9027834960966574,0.9071798848784413,0.9176184490757381,0.932473007719549,0.9335389749722798,0.9345686354384735,0.9435872412143023,0.9455612411983273,0.9544934368221977,0.9622641783447445,0.9652983364956544,0.9685746609127671,0.9752144460346817,0.9790056006848912,0.9758926568071957,0.974906927552712,0.9750815631959557,0.9800196492328739,0.9742799093492154,0.9765639692902677,0.9786762981309992,0.9896227942719509,0.9972475825126185,1.0,0.9851138544519018,0.9766583669352643,0.9734866060633786,0.9639096019106084,0.9602161125161838,0.9586422133197982,0.9412708682332319,0.9183954143076332,0.903166169626759,0.8901901241183805,0.8918108590693989,0.8859498545187063,0.877721284417926,0.8547565157974459,0.8258918943646785,0.7862982544423168,0.7284749769996507,0.6639436576763802,0.5635169077074225,0.43244868217256904,0.2785191623588664,0.1199554443115616,0.0)
+D655T26Aligned.sortedByCoord.out <- c(0.0,0.06959026468132219,0.15085592178718532,0.22258305889417437,0.2822501196273257,0.335775138157833,0.37738355491754316,0.41096482174746596,0.4423587850242226,0.4704649515392049,0.5038898427799827,0.5274572078200305,0.5555665018467957,0.5839072317454956,0.5944539833553822,0.6164536831142511,0.6353594918418856,0.6550311500173577,0.6673101522159984,0.6783909264628154,0.6885615947808084,0.7023707321192333,0.7149362925849824,0.7295472457567483,0.7368382576006355,0.7444666497781031,0.7601171096787107,0.7715094622868992,0.7791050155906463,0.7854366631951286,0.7951944999577786,0.8051712625452316,0.8106260340335832,0.8206618284059385,0.8273472757808615,0.8394061793377806,0.8492981081681226,0.8533263433444985,0.8554288131405535,0.8606111001648199,0.8664317905317708,0.8645638841194334,0.8759613189342691,0.881841822964068,0.8841295978332598,0.8919284394028955,0.8960043691339608,0.8985040329264441,0.8979062872369372,0.8987698714279906,0.8988507957953732,0.9032973356727122,0.9064572953903604,0.9106219682682655,0.915957112430921,0.9264417047441226,0.941828280838048,0.9434342581385675,0.9407066769249053,0.9471415324182234,0.9483682989150661,0.9576073596607275,0.9625523467284663,0.9638799754803076,0.9645410532834182,0.9695087148115831,0.9738094344520443,0.9736866796145655,0.9764142608282277,0.9762629674457298,0.9831106544943908,0.9806219369931476,0.9831427114901655,0.9838690761017442,0.9890310342994217,0.9946378810482168,1.0,0.989232367870446,0.9870833763366204,0.9828209687154996,0.9758278523689338,0.9747570705222632,0.9722351232083267,0.9523773780817719,0.9340771338231016,0.9250018765070698,0.9194908098066259,0.9246828703052139,0.9137099952149069,0.9048865025973986,0.8848450161535983,0.8582662482055902,0.8184459863077534,0.7638740332079201,0.7006255805443747,0.603871312272669,0.4789420722267571,0.32148240930997707,0.15234266270098173,0.012343507129163109)
+D655T38Aligned.sortedByCoord.out <- c(0.03737189238541783,0.11229936516832076,0.19234794153698112,0.2574010756336621,0.30630296111969907,0.3492795539483812,0.3855527654895039,0.41602675442981124,0.43796392918999494,0.45570582734213294,0.483166446454452,0.5006640838720448,0.5238634365810982,0.5465663884425276,0.5572513181954056,0.5770403773828349,0.5931995053720125,0.6089592473617624,0.6183391550449937,0.6279042281237673,0.6315568125353033,0.6425076713136944,0.6531536966350622,0.66397060597838,0.667590195492306,0.6766746264805229,0.6950463824541999,0.7085132252906383,0.7177483493933124,0.7195266266361406,0.7284633192768504,0.7412284049626295,0.7506447547715793,0.7649960578484274,0.7781078361896901,0.7918115528432984,0.8051193307255874,0.8149129057818387,0.8200753761048981,0.8314728971539193,0.8412044221042175,0.8446211176209004,0.862518141037921,0.86890683964529,0.8768866802553116,0.8858829606961824,0.891272948074403,0.8972366527021097,0.8993074518730021,0.897432652243136,0.8972863912791038,0.9053937793291399,0.9108783192497649,0.9165219241245395,0.9198864187584365,0.926831106013591,0.942278135167784,0.9449901187668576,0.9428946965380473,0.9468801846926328,0.9494306410317652,0.9549245377143991,0.9622173950085122,0.9612216385463137,0.9651027249353276,0.9708408823525067,0.9714628607955119,0.969490553856291,0.9667879270192262,0.9681614011898847,0.9733361830419031,0.9715268807460984,0.9745116878269019,0.9776230574254032,0.9881336559282228,0.9944736008809145,1.0,0.9861362334699256,0.9772345055714593,0.9673744482588297,0.9560961028101311,0.9551963762738124,0.9546773222129038,0.9358968234777902,0.9102061097686073,0.8873632989382045,0.8651439439342821,0.8648563466178014,0.8612574404725263,0.8616489470934203,0.838444177311625,0.8092343361648209,0.7680975782237616,0.7051999466172104,0.6348085335639365,0.5333314948116754,0.40844580735805913,0.25797577780546505,0.10902843815451166,0.0)
+D655T21Aligned.sortedByCoord.out <- c(0.0,0.05201084506616516,0.1165292634107812,0.17570301708899605,0.23274573892198572,0.28204958871019675,0.32619572374257294,0.3621545040800422,0.39736877036242657,0.42554826593279793,0.4594676823073759,0.4830240281561679,0.5125762420505218,0.5421826681333528,0.5600802471812948,0.5857814243414697,0.6082157421681459,0.6313012633739826,0.6465256886919288,0.6594699165066585,0.6741397347085487,0.6901520438323615,0.705163563101016,0.7211403878832802,0.7322170879446549,0.7448452422726275,0.7606551592261259,0.7724461459405256,0.7822391670905074,0.7885028104912741,0.8005047319026573,0.8102803394405828,0.8175290018780417,0.8283582972247302,0.8392519900801552,0.8506220930767421,0.8602643057751423,0.8658093912595496,0.8695395183854887,0.872785349961033,0.8780974873143479,0.8777853565322074,0.8879499775922954,0.8893585088165447,0.8876825307958086,0.8906093318561333,0.8924256044494736,0.8978494517669231,0.9030646642984155,0.906167244272893,0.9112812607192282,0.9178337072331545,0.921005941655857,0.9273339825653601,0.9331067592413711,0.9411051926734034,0.952848866932405,0.951965701098306,0.9540602629258286,0.9592984745675839,0.9611995153101791,0.9686676549712906,0.9735786221298753,0.9788815598390851,0.9836755600940467,0.9882228127517582,0.9940908714560014,0.996256073407903,0.9975942930664911,0.9956268834628512,1.0,0.9941151848011366,0.9979179234037632,0.9949530095321455,0.9973886153089964,0.9926442274204592,0.9903505590098028,0.9796333021859669,0.9721497202651075,0.9666614754389216,0.9586213150496978,0.9551776911258919,0.9488558928320315,0.9309159297094621,0.9113867280677199,0.8986271502525303,0.8853050799120514,0.8781201578658928,0.8595056636951817,0.8395151656133074,0.8058858665867612,0.763615473275691,0.7221444633256188,0.6675580464687166,0.6089855552445199,0.5270104836515753,0.4252167501862928,0.2995453404459725,0.16797630171678501,0.042589095267571646)
+D655T32Aligned.sortedByCoord.out <- c(0.04726521653986986,0.14123919702338505,0.2397974453431273,0.32151764501575875,0.38730061372361374,0.4383231785045244,0.48376126483965964,0.5117405585956407,0.5368163965075764,0.5590763478087369,0.586815472781487,0.60949849063157,0.6382145483164168,0.6596098919979456,0.6626441474562431,0.681385441337851,0.6939972583809668,0.7103671626459949,0.7217955018234353,0.7303078224820151,0.7360146022620204,0.7463089752921745,0.7527270241609796,0.7654866373783915,0.7711527732104655,0.7766881094282875,0.7876435008479805,0.7974634481586445,0.8030915264758371,0.8049530192910956,0.8122493469256549,0.820104344099053,0.8239123125297901,0.8322121761878194,0.8369350029374489,0.845145449910029,0.8545526764039713,0.862071437280846,0.8648426155488965,0.8707367269798221,0.8768373835643264,0.8783478604656318,0.8873796846768621,0.8930484069419863,0.8956647687174617,0.9013146469703631,0.901916177399748,0.9059543383719513,0.9052962759058982,0.9000964370037282,0.9005376085840018,0.908874421285605,0.9139530673248523,0.9191226080112916,0.9281732762347447,0.9379289322095897,0.9533728934426532,0.9565327756491023,0.9560701736235557,0.9600037688024445,0.958571623873516,0.9644291557513034,0.9701030508825279,0.9734495257590258,0.9749108604323777,0.9822615031609907,0.9931296948378491,0.993152603244865,0.9919077899668567,0.9898449248641199,0.9940257091445188,0.9879660659983817,0.9915556655815965,0.9905864921686502,0.9944886806605011,1.0,0.9967909755655975,0.9810647236396286,0.970303314698699,0.9613838155799337,0.9485425449762233,0.9406313852565926,0.9329260317096691,0.9106354127023422,0.8888251312614773,0.8742128929992647,0.8546040355745391,0.8473949076828147,0.8274221021788851,0.807862386982113,0.7802884242341387,0.7457806039690663,0.6939048857720318,0.6335822467235436,0.564739527717325,0.4689687152448059,0.35413773864463516,0.21955084742631437,0.09183093595622277,0.0)
+D655T35Aligned.sortedByCoord.out <- c(0.0459517698763301,0.13575297818458498,0.22111388078176636,0.2901189002577876,0.34161774002445383,0.38623798600149145,0.42476558744146786,0.45487250682323194,0.4782650253055786,0.49401476695019514,0.5168640766776066,0.5329422041026456,0.5509930121020097,0.568984672806629,0.5787647962872533,0.5984258302387468,0.6147457518047023,0.6288157102785695,0.6396491287840074,0.6497008566420992,0.649602435543644,0.6617508167058458,0.6717273092050225,0.6815187889662377,0.6894114039769694,0.6984500569706743,0.7184782773279429,0.7300384977912034,0.7398129431315322,0.7432903308841622,0.7532611452430433,0.7653200956955911,0.7755256065200192,0.7884954253116353,0.8038831855124143,0.8192146374885964,0.8312811587948715,0.8390445961138808,0.8430136161804286,0.8530875834213445,0.8567902040723622,0.8539577584216285,0.8672285186489055,0.8742968569600751,0.8756250686108619,0.8862233174723948,0.8906607841133205,0.8981554561250099,0.8988448769925541,0.9001560542224544,0.9051495054339803,0.9137627710838813,0.9244873585669888,0.9294069939546733,0.9277149081466172,0.9315093253990786,0.943037842912356,0.9402806326205374,0.9396408954805788,0.9471313088870467,0.9512138917595042,0.9566909312528628,0.9626974573287757,0.962682788799679,0.9685071412077783,0.9739633608533866,0.9763585897013677,0.9723474567609617,0.9706738249088659,0.9703241461023352,0.976767888981001,0.9735043778461678,0.9797252537182355,0.9800512736068683,0.9903192439745467,0.9926113199404931,1.0,0.9903041022670922,0.9846950460118635,0.976120580987315,0.966760639888557,0.965992198235234,0.968889469321008,0.9530583409988227,0.9255070579283873,0.9085649068217178,0.8960110118067464,0.8939683008354438,0.8909418520579473,0.8915120319792862,0.8748045773381635,0.8540812579730553,0.8248445135915752,0.7674617009437069,0.7097907226758425,0.6085438030669529,0.47523668381465034,0.31097944134670347,0.1334471800462579,0.0)
+D655T28Aligned.sortedByCoord.out <- c(0.030031479372934045,0.1256569693913331,0.22943498662422138,0.3114192508776008,0.37258733654562143,0.42443571549581,0.4659848434108039,0.4974213705149773,0.5218045875571771,0.5425286722323563,0.5735012824200113,0.5929124132741306,0.6165549391884705,0.6405293971640985,0.6466873771260396,0.6690529003179456,0.6873850057324765,0.7010587352305007,0.7090832174361843,0.7157676593766374,0.7184477399070984,0.7291099492941765,0.7381587915703046,0.7486944333909864,0.753301591303971,0.7598294243490389,0.7729954061390687,0.7827307666547157,0.7891724155592414,0.7881411607575537,0.7967571124077584,0.8088878995496755,0.8171788138698354,0.8289136464460616,0.8411252004396869,0.8521666200451506,0.8643116891303577,0.8715920328425598,0.874855210643889,0.8845359057903923,0.8905796302060146,0.8929494478305235,0.9031132666448661,0.9057214449780747,0.9073845526501377,0.9136109874437095,0.9157453992443375,0.9202038279547863,0.9196222081263272,0.9163949814236241,0.9191922723852224,0.9253408952119047,0.927953505872341,0.9332678662185748,0.9374608477761537,0.9477428619832399,0.9596737019190992,0.9619218767852429,0.9596791192079333,0.9658563059211952,0.966405914497453,0.9714592600180445,0.9778280217637116,0.9798575351532798,0.9826622133269245,0.9892496365491673,0.9952022520162164,0.9926728706115036,0.9872033788122939,0.9816866088559868,0.9823273263808177,0.9783933897256685,0.9799703132571892,0.9814807518802917,0.9899607788288413,0.9962901421102606,1.0,0.9872447471997542,0.9794507460099205,0.9723654246957454,0.964392160493584,0.9678405110768782,0.9693312504678567,0.9491656390233909,0.9273571116197891,0.9135755288258863,0.9059115425680707,0.9121975675388173,0.9105359373091637,0.9061366062950866,0.8799558343215781,0.85018438481268,0.8139619292639972,0.7565549194892384,0.6919045020625096,0.5907809563583212,0.45772643282364855,0.29321371302946614,0.12573034903099478,0.0)
+D655T37Aligned.sortedByCoord.out <- c(0.029646454904399926,0.11386060011993476,0.20233675947832316,0.2728332027697843,0.32858580649563496,0.381216694813281,0.42048811084386045,0.4517424438259625,0.4749022741677066,0.49283693815574287,0.5209612451519808,0.5421514685884221,0.5673552636355803,0.5909026293355518,0.6023340476056133,0.6240329658745811,0.6444306226416002,0.6607797158919677,0.6698063154266629,0.6732464571788738,0.6729901414679017,0.6849153830104674,0.6960791132001279,0.705921461541927,0.7103579978156302,0.7173436944366807,0.7366867826385909,0.7498279929123894,0.7624233294536058,0.7609427344337413,0.7695363091324938,0.7795334966580543,0.7885692815680573,0.8031827762840608,0.8191320870091237,0.8313538849544865,0.8455553499781082,0.8540308269943309,0.8596024132167928,0.873273750865503,0.8800617432180219,0.8813310746058053,0.8987601055530843,0.9021980603111742,0.9026568916777438,0.9066455315554821,0.9070558116525671,0.9097112599141911,0.9127708646893615,0.9083815674886703,0.9097921786966652,0.9145427673261328,0.9195466098748033,0.9224316925191242,0.9220957702221505,0.9284450515540124,0.9444232306014715,0.9456435733209462,0.943440395443529,0.9503141179655881,0.9565343666443156,0.9626303940569747,0.9706356673371991,0.9689223761428685,0.9718651954319817,0.976245307257365,0.9765453628507555,0.9678822417389578,0.9627738608713072,0.9602413216792791,0.9654778604024157,0.9615850108671737,0.9697276273781921,0.9716744895446372,0.9851629944848382,0.9919667331950278,1.0,0.9869445198957416,0.9793910796008998,0.9652543496032574,0.9560418555682839,0.9564258917359179,0.9573986667209041,0.9373806721332771,0.904703480776103,0.8793019814604134,0.8582451646653484,0.854168607623949,0.8433954745842852,0.8324701267538053,0.8079740430041776,0.7790173660455166,0.7372580255029758,0.6742953395592682,0.610311764759914,0.5149115820146852,0.3937105548272865,0.2515852426885506,0.1073346096631023,0.0)
+D655T29Aligned.sortedByCoord.out <- c(0.0,0.06960168912053895,0.14916930808057585,0.22481003326920768,0.2919855027536462,0.34716892836960117,0.3966763423747065,0.4393838151163532,0.47584385572762855,0.5060953994158978,0.54198439031915,0.5667401367849456,0.5946511182933178,0.6268831661962305,0.6410904379580449,0.6654672150721525,0.687342868627419,0.7111856771833752,0.7231083793015988,0.734235690755076,0.7448034476569905,0.7589491647100179,0.7698124583764092,0.7842737360148443,0.792647030467356,0.8040009077465489,0.8165487980516081,0.8288248835281082,0.8392446866420349,0.8426064636893964,0.85396590314107,0.862468239995135,0.869423180465057,0.8778190944189903,0.8879337196694734,0.8962606626846455,0.9033728272300233,0.9087811129387998,0.9111928709264503,0.910956664001768,0.9135979543071239,0.9116523063733597,0.9179920705669115,0.9162644597943924,0.9175923357712953,0.9219705071366381,0.9225997742499595,0.9257457390050683,0.9301654412582673,0.9277863146825038,0.9316516537451219,0.9375534895586898,0.940144720311719,0.9458092367661084,0.952142697164182,0.9593130791148581,0.969722128695322,0.9714883038637075,0.9743238993943907,0.9795015403509657,0.9790621287249869,0.9856603485331439,0.9894311306635895,0.9893406526579026,0.9927873455384703,0.9963623391975935,1.0,0.9997241162449552,0.9973594513176416,0.9915588470432233,0.9933420795405498,0.9897967508013237,0.9898835206920232,0.9885793766510382,0.9917561187605403,0.9892368254382621,0.9867661084223157,0.9771698776470379,0.9690524431286405,0.9611207851710999,0.9541740025541496,0.950749558363505,0.9478394297215799,0.9331990501292649,0.9162596392449092,0.900302137209154,0.8827063899720705,0.8819443723422086,0.8661014510595568,0.8479969504462346,0.8182467439042298,0.77955515969368,0.7375548244800852,0.6849110868188378,0.6243160381906179,0.5429025195899715,0.4403731401949282,0.3123575156816183,0.16967444233658707,0.03623940776953917)
+D655T27Aligned.sortedByCoord.out <- c(0.016911271883158097,0.09578801402455363,0.18460568558758914,0.2606053046246484,0.3230260113819786,0.37549263981020087,0.4196676382643158,0.4559650196416247,0.4867373722512564,0.5119768778239056,0.5445385479768096,0.5689898298531374,0.5951906271744561,0.6213548207803912,0.6337211905660498,0.6565899836598171,0.6741594116681272,0.690849639755473,0.7036840395718147,0.7141129000732785,0.721139036547566,0.7352520787711955,0.7458678669842306,0.7574246905209171,0.765480706288234,0.7740043967103566,0.792059978919103,0.8048172621700246,0.8133295805640668,0.8178026967343089,0.8281491100321899,0.838049171227916,0.8463749172862645,0.8575148849186296,0.8687255723506195,0.8787923048328987,0.8899503966350168,0.8952458525858215,0.8973574960499971,0.9019660104295713,0.9092810674922759,0.9103216080616308,0.9189494236158643,0.9188644887811389,0.9181100257931812,0.9228205330496012,0.9246304623937692,0.9281817335377456,0.9289983873042679,0.9284212568791885,0.9308637552853277,0.9371446685444728,0.9404425566877831,0.944997409309853,0.9496823295030922,0.957106486960193,0.9718716439190568,0.9734050908305205,0.9738841375134065,0.9794567866486704,0.9802688205287851,0.9875892082296525,0.9923867825760628,0.9947137838220107,0.995306906161578,0.998503867555675,1.0,0.9967810053014974,0.9919194632971348,0.9876240350656486,0.9900658227200327,0.9851996608292625,0.9876020017612428,0.9883880932022991,0.9929010114708225,0.9925093872538044,0.9936867475360014,0.9802549608695621,0.9704337931186436,0.9641031272366469,0.9562294192944936,0.9536202496018014,0.9504844128586365,0.9322618039874595,0.9106222560540057,0.889639442742194,0.8729150985706071,0.8699146600367743,0.8562891935170911,0.843519827486334,0.8176680092767319,0.7814569842376583,0.7388250278437,0.6817815134890022,0.6179297080729317,0.5232120861914439,0.40306056813230784,0.2595427307508879,0.11260333442078352,0.0)
+D655T30Aligned.sortedByCoord.out <- c(0.014147607232768051,0.09361201003969942,0.1816780792062846,0.25900173064283943,0.3220310909265951,0.37281253340186166,0.41918057131681224,0.45649552026550166,0.48804734517265874,0.5153097077465029,0.5475744847300902,0.5709942592386232,0.6011830986769641,0.6303974565690518,0.641823641202793,0.6641283146965159,0.6818384081421326,0.7042764995682869,0.7173158282941532,0.7310120129203138,0.73950755137917,0.7546125838884201,0.766330620249355,0.7806931364812385,0.7906100307543495,0.8016120828131171,0.8148227322931283,0.8295199304407416,0.8351196933206889,0.8376572872344055,0.845844296724514,0.8571677647114117,0.8626686012266869,0.8731801907724822,0.8807713679052551,0.891197297073978,0.8989730609484954,0.9034846338170491,0.9058770599236031,0.9058876727136829,0.9103639959580431,0.9117023445927456,0.9190661047952375,0.9209161415230718,0.9251737654861454,0.9295746621152958,0.9302148407740363,0.9330408751609922,0.9326118152191958,0.9295041628669088,0.9301974054760481,0.9378344450230942,0.9416982586685648,0.9445034465035784,0.9533101671287021,0.9610647054230599,0.9736567808527073,0.9726951862658367,0.9727383954825901,0.9778624779500334,0.9746373268504347,0.9817437268934923,0.9861753248082307,0.9877179696519687,0.9897006662558001,0.9944112289383495,1.0,0.9989713174186966,0.9957465453473149,0.991034466551897,0.9905868342274609,0.980397039638013,0.9796696844893314,0.9766204024824832,0.9758771281486821,0.9719367508033503,0.9626998331517789,0.9447990885129435,0.9292062466882409,0.916277973229995,0.8987456440182146,0.8886013328148228,0.8794807768259116,0.8564157727286166,0.8315003528752701,0.8115301141708796,0.790754819533295,0.7831439329332311,0.7618175312679327,0.7383719828406345,0.7016922851838628,0.661350416893136,0.6193241472054628,0.5617152694549499,0.5031398697507434,0.42300003866087815,0.3266317354261755,0.21430217493971557,0.09958246251600447,0.0)
+D655T33Aligned.sortedByCoord.out <- c(0.0497096122028318,0.12597335802314055,0.2110398751220472,0.28271820371111345,0.3387599960119168,0.38861103583433293,0.4298534379429221,0.4621771156935026,0.48732487900691457,0.5055448850417453,0.5329445098632588,0.5544661041478262,0.5793648318702309,0.5999131230336839,0.6095152678142801,0.6290902558566187,0.6441263835859632,0.6614161296882487,0.6725515782575678,0.6822222407669066,0.6846757025153473,0.6951286090944987,0.7069422074918866,0.7181488090872077,0.720394082352161,0.7303511138303475,0.7464519016524631,0.7592475874951631,0.7712509272952232,0.7740215031472037,0.7841283073529625,0.7964276788784878,0.8033115145360801,0.815917019759898,0.8269760447086965,0.838616591919388,0.8478783441373201,0.8549800310350174,0.8623786280905997,0.8702704649498876,0.8780248271354802,0.8770554769602549,0.8918399338013329,0.8968316260267228,0.9083206436450026,0.9170632423028457,0.9202497559055913,0.924826828028846,0.9271173405634178,0.9266671439482814,0.928412149950171,0.9322034642739339,0.9338022112779303,0.9400926658359624,0.9434144580313539,0.9529836615962083,0.9649584523426256,0.9658711436267752,0.9631796266925746,0.9707517141510631,0.9759195320766186,0.9850130644861631,0.9917321940650471,0.9924973087026739,0.993316886150327,1.0,0.9998335370564521,0.9924696380814509,0.9886480178392055,0.9858251752582482,0.9888355631608282,0.9821313669330806,0.9794938735926964,0.9755093041365822,0.9802739215814594,0.989565540501664,0.9973282477952444,0.9808040555467956,0.9661711282981295,0.9562360576304373,0.9424503784506473,0.9342221019745843,0.9268362421890888,0.9038836814927026,0.8743551757018565,0.8506801043402028,0.8283007207977221,0.824676308633717,0.8164932714272726,0.8070738405899903,0.7829305647485948,0.7520558612744386,0.7076190396713258,0.6496328372093432,0.5839550804797822,0.49032867866634633,0.37529443956670444,0.2380200484631166,0.09961511483527416,0.0)
+D655T34Aligned.sortedByCoord.out <- c(0.05223052369532057,0.14277952451666567,0.2358198391837668,0.3108182136827575,0.3643289595523034,0.4122662921910932,0.4506550208549911,0.48327564984540927,0.5068670878271274,0.5236557106653045,0.5484070463787201,0.5682878579185067,0.5927929395709723,0.6120889444258021,0.6206656109006471,0.6416158900010388,0.6625874687698283,0.6787415856967869,0.6892651165988689,0.6994684051181982,0.7022848191658153,0.7164939400575017,0.7277491332529675,0.7375933168366778,0.7423323062159906,0.7516492295872572,0.7686706540642383,0.7834589764649874,0.7933326806417403,0.796843015465054,0.8066393682144675,0.8185014151200741,0.8274880067919784,0.8416096869397159,0.8547669031552656,0.8689853660067756,0.883758367593414,0.8909763394315156,0.8955849150516909,0.9047998242216839,0.9100608423159391,0.9065292078242276,0.9174256697624676,0.9203119616695652,0.9260113045187434,0.9310724046727735,0.9327158422449402,0.9378240258764814,0.9389047037888747,0.9353805428650221,0.9353555064126949,0.9375493722576677,0.9428727946435445,0.9465255009345697,0.9486016580857651,0.9557258366472379,0.9675867625176656,0.9669974716919933,0.9651324428328111,0.9743275470479781,0.9781487822942209,0.983795436489994,0.9900351182953688,0.9900037293103616,0.9934004659022203,1.0,0.9984174720058832,0.9867676744274686,0.976785977195155,0.9677089553521583,0.9661518374887617,0.9550326632283272,0.9535207604504767,0.9522752903667953,0.9593654641945101,0.9646582449521655,0.9691898428233944,0.9541649819999118,0.9390205440906872,0.927461550361758,0.9176779026777047,0.9165968510869184,0.9138510622555677,0.8902129144747315,0.8594091098308059,0.8310962453542434,0.8090828512259267,0.8064319767063837,0.8060784769466589,0.8028110330787587,0.7802651472404972,0.7530004506561419,0.7177734148749411,0.6648164603837378,0.6054583950214081,0.5165106061138269,0.4042987214967464,0.26467005318938247,0.11136811880581354,0.0)
+D655T39Aligned.sortedByCoord.out <- c(0.05431578064611278,0.13010997479804456,0.21461351941042173,0.287694490994241,0.3431940984336616,0.3910966103876012,0.4328255107986692,0.464906313212736,0.498463374748595,0.5192734231427113,0.5472323394730868,0.5710447894993298,0.5979843496290556,0.6215430450266262,0.6302281767404604,0.650000072294766,0.6689998597481539,0.6907425106237158,0.7039363054193603,0.7168864668535727,0.7242102881235605,0.7389775785012717,0.7526940644551215,0.7680577866523619,0.7769926967827383,0.7896233153512152,0.8033152210846239,0.8169283255230888,0.8240034527980243,0.8309455577035134,0.8422119740375036,0.8517953682189316,0.8587747049289125,0.8669888362422338,0.8740925199497407,0.8871984766046908,0.9012945100800592,0.9095299683493514,0.915662371875601,0.9222809577032242,0.9287137459822183,0.9297468381884089,0.9405104444248445,0.9475797881184997,0.9546393720187446,0.961384112213044,0.9620087389913146,0.9676629126404507,0.9662376213286911,0.9599826781740656,0.9590370626347394,0.9611990376120749,0.967096483148813,0.9707057993415392,0.9757458289534754,0.9843402307359752,0.9978763412486463,0.9986253150244429,0.9967055275132191,0.9998387826718121,0.995455912482848,0.9996200910046514,1.0,0.9989416046257084,0.9970337457508751,0.9949212926882519,0.9970254318527847,0.9904249197166624,0.9780787810524094,0.972584740309971,0.9695432995042025,0.9541239103371394,0.9453769665983722,0.9354053495235052,0.9310268170205014,0.9268301058539964,0.9216635604015541,0.9013819867469235,0.8811947577619276,0.8657764530163545,0.84582165170406,0.8324012128169945,0.8172684723971354,0.7921749591173098,0.7651793705439314,0.7402817760799754,0.7111567451739629,0.6988275957797208,0.679750091452879,0.6625139348161472,0.6320677170614202,0.59910058081615,0.5573937303087131,0.500141697741367,0.4427805000773554,0.36187868070727414,0.2647853640692121,0.16066463470177686,0.06222338215157899,0.0)
+data_matrix <- matrix(c(D655T23Aligned.sortedByCoord.out,D655T36Aligned.sortedByCoord.out,D655T20Aligned.sortedByCoord.out,D655T25Aligned.sortedByCoord.out,D655T31Aligned.sortedByCoord.out,D655T22Aligned.sortedByCoord.out,D655T24Aligned.sortedByCoord.out,D655T26Aligned.sortedByCoord.out,D655T38Aligned.sortedByCoord.out,D655T21Aligned.sortedByCoord.out,D655T32Aligned.sortedByCoord.out,D655T35Aligned.sortedByCoord.out,D655T28Aligned.sortedByCoord.out,D655T37Aligned.sortedByCoord.out,D655T29Aligned.sortedByCoord.out,D655T27Aligned.sortedByCoord.out,D655T30Aligned.sortedByCoord.out,D655T33Aligned.sortedByCoord.out,D655T34Aligned.sortedByCoord.out,D655T39Aligned.sortedByCoord.out), byrow=T, ncol=100)
+rowLabel <- c("Sample1","Sample2","Sample3","Sample4","Sample5",
+                                      "Sample6","Sample7","Sample8","Sample9","Sample10",
+                                      "Sample11","Sample12","Sample13","Sample14","Sample15",
+                                      "Sample16","Sample17","Sample18","Sample19","Sample20")
+
+
+#pdf("GENE_COVERAGE.geneBodyCoverage.heatMap.pdf")
+rc <- cm.colors(ncol(data_matrix))
+heatmap(data_matrix, scale=c("none"),keep.dendro=F, labRow = rowLabel ,Colv = NA,Rowv = NA,labCol=NA,col=cm.colors(256),margins = c(6, 8),ColSideColors = rc,cexRow=1,cexCol=1,xlab="Gene body percentile (5'->3')", add.expr=x_axis_expr <- axis(side=1,at=c(1,10,20,30,40,50,60,70,80,90,100),labels=c("1","10","20","30","40","50","60","70","80","90","100")))
+#dev.off()
+
+
+#pdf("GENE_COVERAGE.geneBodyCoverage.curves.pdf")
+x=1:100
+icolor = colorRampPalette(c("#7fc97f","#beaed4","#fdc086","#ffff99","#386cb0","#f0027f"))(20)
+layout(matrix(c(1,1,1,2,1,1,1,2,1,1,1,2), 4, 4, byrow = TRUE))
+plot(x,D655T23Aligned.sortedByCoord.out,type='l',xlab="Gene body percentile (5'->3')", ylab="Coverage",lwd=0.8,col=icolor[1])
+lines(x,D655T36Aligned.sortedByCoord.out,type='l',col=icolor[2])
+lines(x,D655T20Aligned.sortedByCoord.out,type='l',col=icolor[3])
+lines(x,D655T25Aligned.sortedByCoord.out,type='l',col=icolor[4])
+lines(x,D655T31Aligned.sortedByCoord.out,type='l',col=icolor[5])
+lines(x,D655T22Aligned.sortedByCoord.out,type='l',col=icolor[6])
+lines(x,D655T24Aligned.sortedByCoord.out,type='l',col=icolor[7])
+lines(x,D655T26Aligned.sortedByCoord.out,type='l',col=icolor[8])
+lines(x,D655T38Aligned.sortedByCoord.out,type='l',col=icolor[9])
+lines(x,D655T21Aligned.sortedByCoord.out,type='l',col=icolor[10])
+lines(x,D655T32Aligned.sortedByCoord.out,type='l',col=icolor[11])
+lines(x,D655T35Aligned.sortedByCoord.out,type='l',col=icolor[12])
+lines(x,D655T28Aligned.sortedByCoord.out,type='l',col=icolor[13])
+lines(x,D655T37Aligned.sortedByCoord.out,type='l',col=icolor[14])
+lines(x,D655T29Aligned.sortedByCoord.out,type='l',col=icolor[15])
+lines(x,D655T27Aligned.sortedByCoord.out,type='l',col=icolor[16])
+lines(x,D655T30Aligned.sortedByCoord.out,type='l',col=icolor[17])
+lines(x,D655T33Aligned.sortedByCoord.out,type='l',col=icolor[18])
+lines(x,D655T34Aligned.sortedByCoord.out,type='l',col=icolor[19])
+lines(x,D655T39Aligned.sortedByCoord.out,type='l',col=icolor[20])
+par(mar=c(1,0,2,1))
+plot.new()
+#legend(0,1,fill=icolor[1:20],legend=c('D655T23Aligned.sortedByCoord.out','D655T36Aligned.sortedByCoord.out','D655T20Aligned.sortedByCoord.out','D655T25Aligned.sortedByCoord.out','D655T31Aligned.sortedByCoord.out','D655T22Aligned.sortedByCoord.out','D655T24Aligned.sortedByCoord.out','D655T26Aligned.sortedByCoord.out','D655T38Aligned.sortedByCoord.out','D655T21Aligned.sortedByCoord.out','D655T32Aligned.sortedByCoord.out','D655T35Aligned.sortedByCoord.out','D655T28Aligned.sortedByCoord.out','D655T37Aligned.sortedByCoord.out','D655T29Aligned.sortedByCoord.out','D655T27Aligned.sortedByCoord.out','D655T30Aligned.sortedByCoord.out','D655T33Aligned.sortedByCoord.out','D655T34Aligned.sortedByCoord.out','D655T39Aligned.sortedByCoord.out'))
+legend(0,1,fill=icolor[1:20],legend=c("Sample1","Sample2","Sample3","Sample4","Sample5",
+                                      "Sample6","Sample7","Sample8","Sample9","Sample10",
+                                      "Sample11","Sample12","Sample13","Sample14","Sample15",
+                                      "Sample16","Sample17","Sample18","Sample19","Sample20"))
+
+#dev.off()
+heatmap(data_matrix, scale=c("none"),keep.dendro=F, labRow = rowLabel ,Colv = NA,Rowv = NA,labCol=NA,col=cm.colors(256),margins = c(6, 8),ColSideColors = rc,cexRow=1,cexCol=1,xlab="Coverage 0% 100%", add.expr=x_axis_expr <- axis(side=1,at=c(1,10,20,30,40,50,60,70,80,90,100),labels=c("1","10","20","30","40","50","60","70","80","90","100")))
+```
+
+
+
